@@ -44,7 +44,7 @@
 <body>
     
     <div class="mainContainer">
-        <input name="urlinput" class="urlInput" type="text" value="http://127.0.0.1/flv/7182741.json"/>
+        <input name="urlinput" class="urlInput" type="text" value="/test_player/demo/mp4.json"/>
         <video name="videoElement" class="centeredVideo" controls autoplay width="1024" height="576">
             Your browser is too old which doesn't support HTML5 video.
         </video>
@@ -58,10 +58,12 @@
             <button onclick="flv_seekto()">SeekTo</button>
         </div>
     </div>
-
-    <script src="../dist/flv.js"></script>
-    
+    <script type="text/javascript" id="Flvjs"></script>
     <script>
+        var Flvjs = document.querySelector('#Flvjs')
+        Flvjs.onload = function () { flv_load() }
+        document.querySelector('#Flvjs').src = '../dist/flv.js?timestamp=' + new Date().getTime()
+
         function flv_load() {
             console.log('isSupported: ' + flvjs.isSupported());
             var urlinput = document.getElementsByName('urlinput')[0];
@@ -70,7 +72,7 @@
             xhr.open('GET', urlinput.value, true);
             xhr.onload = function (e) {
                 var mediaDataSource = JSON.parse(xhr.response);
-
+                mediaDataSource.url = mediaDataSource.url.concat('?timestamp=' + new Date().getTime())
                 var element = document.getElementsByName('videoElement')[0];
                 if (typeof player !== "undefined") {
                     if (player != null) {
@@ -127,10 +129,6 @@
         var urlInputBox = document.getElementsByName('urlinput')[0];
         var url = decodeURIComponent(getUrlParam('src', urlInputBox.value));
         urlInputBox.value = url;
-        
-        document.addEventListener('DOMContentLoaded', function () {
-            flv_load();
-        });
     </script>
     
 </body>

@@ -16,10 +16,10 @@
  * limitations under the License.
  */
 
-import EventEmitter from 'events';
 import Log from '../utils/logger.js';
 import Browser from '../utils/browser.js';
 import PlayerEvents from './player-events.js';
+import BasePlayer from './base-player.js';
 import Transmuxer from '../core/transmuxer.js';
 import TransmuxingEvents from '../core/transmuxing-events.js';
 import MSEController from '../core/mse-controller.js';
@@ -28,12 +28,12 @@ import {ErrorTypes, ErrorDetails} from './player-errors.js';
 import {createDefaultConfig} from '../config.js';
 import {InvalidArgumentException, IllegalStateException} from '../utils/exception.js';
 
-class FlvPlayer {
+class FlvPlayer extends BasePlayer {
 
     constructor(mediaDataSource, config) {
+        super();
         this.TAG = 'FlvPlayer';
         this._type = 'FlvPlayer';
-        this._emitter = new EventEmitter();
 
         this._config = createDefaultConfig();
         if (typeof config === 'object') {
@@ -267,57 +267,6 @@ class FlvPlayer {
             this._transmuxer.close();
             this._transmuxer.destroy();
             this._transmuxer = null;
-        }
-    }
-
-    play() {
-        this._mediaElement.play();
-    }
-
-    pause() {
-        this._mediaElement.pause();
-    }
-
-    get type() {
-        return this._type;
-    }
-
-    get buffered() {
-        return this._mediaElement.buffered;
-    }
-
-    get duration() {
-        return this._mediaElement.duration;
-    }
-
-    get volume() {
-        return this._mediaElement.volume;
-    }
-
-    set volume(value) {
-        this._mediaElement.volume = value;
-    }
-
-    get muted() {
-        return this._mediaElement.muted;
-    }
-
-    set muted(muted) {
-        this._mediaElement.muted = muted;
-    }
-
-    get currentTime() {
-        if (this._mediaElement) {
-            return this._mediaElement.currentTime;
-        }
-        return 0;
-    }
-
-    set currentTime(seconds) {
-        if (this._mediaElement) {
-            this._internalSeek(seconds);
-        } else {
-            this._pendingSeekTime = seconds;
         }
     }
 

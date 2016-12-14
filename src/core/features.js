@@ -56,9 +56,23 @@ class Features {
             networkLoaderName: '',
             nativeMP4H264Playback: false,
             nativeWebmVP8Playback: false,
-            nativeWebmVP9Playback: false
+            nativeWebmVP9Playback: false,
+            nativeHlsPlayback: false
         };
-
+        let hlsMimeType = [
+            // Apple santioned
+            'application/vnd.apple.mpegurl',
+            // Apple sanctioned for backwards compatibility
+            'audio/mpegurl',
+            // Very common
+            'audio/x-mpegurl',
+            // Very common
+            'application/x-mpegurl',
+            // Included for completeness
+            'video/x-mpegurl',
+            'video/mpegurl',
+            'application/mpegurl'
+        ];
         features.mseFlvPlayback = Features.supportMSEH264Playback();
         features.networkStreamIO = Features.supportNetworkStreamIO();
         features.networkLoaderName = Features.getNetworkLoaderTypeName();
@@ -66,7 +80,9 @@ class Features {
         features.nativeMP4H264Playback = Features.supportNativeMediaPlayback('video/mp4; codecs="avc1.42001E, mp4a.40.2"');
         features.nativeWebmVP8Playback = Features.supportNativeMediaPlayback('video/webm; codecs="vp8.0, vorbis"');
         features.nativeWebmVP9Playback = Features.supportNativeMediaPlayback('video/webm; codecs="vp9"');
-
+        features.nativeHlsPlayback = hlsMimeType.some(function (canItPlay) {
+            return Features.supportNativeMediaPlayback(canItPlay);
+        });
         return features;
     }
 

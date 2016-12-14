@@ -16,18 +16,18 @@
  * limitations under the License.
  */
 
-import EventEmitter from 'events';
 import PlayerEvents from './player-events.js';
+import BasePlayer from './base-player.js';
 import {createDefaultConfig} from '../config.js';
 import {InvalidArgumentException, IllegalStateException} from '../utils/exception.js';
 
 // Player wrapper for browser's native player (HTMLVideoElement) without MediaSource src. 
-class NativePlayer {
+class NativePlayer extends BasePlayer {
 
     constructor(mediaDataSource, config) {
+        super();
         this.TAG = 'NativePlayer';
         this._type = 'NativePlayer';
-        this._emitter = new EventEmitter();
 
         this._config = createDefaultConfig();
         if (typeof config === 'object') {
@@ -137,57 +137,6 @@ class NativePlayer {
         if (this._statisticsReporter != null) {
             window.clearInterval(this._statisticsReporter);
             this._statisticsReporter = null;
-        }
-    }
-
-    play() {
-        this._mediaElement.play();
-    }
-
-    pause() {
-        this._mediaElement.pause();
-    }
-
-    get type() {
-        return this._type;
-    }
-
-    get buffered() {
-        return this._mediaElement.buffered;
-    }
-
-    get duration() {
-        return this._mediaElement.duration;
-    }
-
-    get volume() {
-        return this._mediaElement.volume;
-    }
-
-    set volume(value) {
-        this._mediaElement.volume = value;
-    }
-
-    get muted() {
-        return this._mediaElement.muted;
-    }
-
-    set muted(muted) {
-        this._mediaElement.muted = muted;
-    }
-
-    get currentTime() {
-        if (this._mediaElement) {
-            return this._mediaElement.currentTime;
-        }
-        return 0;
-    }
-
-    set currentTime(seconds) {
-        if (this._mediaElement) {
-            this._mediaElement.currentTime = seconds;
-        } else {
-            this._pendingSeekTime = seconds;
         }
     }
 

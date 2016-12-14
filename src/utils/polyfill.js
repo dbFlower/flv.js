@@ -49,6 +49,9 @@ class Polyfill {
         if (typeof self.Promise !== 'function') {
             require('es6-promise').polyfill();
         }
+
+        // fetch polyfill
+        require('whatwg-fetch');
     }
 
 }

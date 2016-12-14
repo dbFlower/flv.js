@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Title</title>
+  <script src="./m3u8-parser.min.js"></script>
+</head>
+<body>
+  <video id="flvjs-m3u8-player" class="flvjs " controls>
+    <source src="/m3u8/test_720.m3u8" type="application/x-mpegURL">
+  </video>
+
+</body>
+<script>
+  var v = document.querySelector('video')
+  console.log('canplay application/x-mpegurl '.concat(v.canPlayType('application/x-mpegurl')))
+  console.log('canplay application/vnd.apple.mpegurl '.concat(v.canPlayType('application/vnd.apple.mpegurl')))
+  console.log('support requestFullscreen', 'requestFullscreen' in HTMLVideoElement.prototype)
+</script>
+</html>
