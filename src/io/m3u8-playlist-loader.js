@@ -6,7 +6,7 @@ import Log from '../utils/logger';
 import m3u8 from 'm3u8-parser';
 import EventEmitter from 'events';
 import resolveURL from '../utils/resolve-url';
-
+import Stream from './stream';
 /**
  * Returns a new array of segments that is the result of merging
  * properties from an older list of segments onto an updated
@@ -103,12 +103,13 @@ const updateMaster = function (master, media) {
     return changed ? result : null;
 };
 
-class M3U8PlaylistLoader {
+class M3U8PlaylistLoader extends Stream {
 
     constructor(srcURL, withCredentials) {
+        super();
         this.TAG = 'M3U8PlaylistLoader';
         this.state = 'HAVE_NOTHING';
-        this.url = srcURL;
+        this.srcURL = srcURL;
         this.withCredentials = withCredentials;
         this.cors = true;
         this.bandwidth = null;
@@ -131,13 +132,12 @@ class M3U8PlaylistLoader {
             Log.e(this.TAG, 'A non-empty playlist URL is required');
         }
 
-        resolveURL();
     }
 
     destroy() {
         this.stopRequest();
         window.clearTimeout(this.mediaUpdateTimeout);
-
+        super.dispose();
     }
 
     /**
@@ -158,7 +158,7 @@ class M3U8PlaylistLoader {
         this.state = 'HAVE_METADATA';
         parser.push(xhr.responseText);
         parser.end();
-        parser.mainfest.uri = url;
+        parser.manifest.uri = url;
 
         // merge this playlist into the master
         let update = updateMaster(this.master, parser.manifest);
@@ -178,7 +178,7 @@ class M3U8PlaylistLoader {
         if (!this.media().endList) {
             window.clearTimeout(this.mediaUpdateTimeout);
             this.mediaUpdateTimeout = window.setTimeout(function () {
-                // this.trigger('mediaupdatetimeout');
+                this.trigger('mediaupdatetimeout');
             }, this.refreshDelay);
         }
 
@@ -236,46 +236,76 @@ class M3U8PlaylistLoader {
 
     start() {
         this.started = true;
-        this._xhr = self.fetch(this.srcURL, {
-            withCredentials: this.withCredentials
-        }).then((res) => res.text()).then((text) => {
-            let parser = new m3u8.Parser();
-            parser.push(text);
-            parser.end();
+        this._xhr = this.xhr(this.srcURL, {
+            withCredentials: this.withCredentials,
+            success: function (e, xhr) {
+                let parser = new m3u8.Parser();
+                let i;
+                let playlist;
+                parser.push(xhr.responseText);
+                parser.end();
+                console.log(parser);
+                this.state = 'HAVE_MASTER';
 
-            this.state = 'HAVE_MASTER';
-            
-            parser.mainfest.uri = this.srcURL; 
-            
-            // loaded a master playlist
-            if (parser.mainfest.playlists) {
-                this.master = parser.mainfest;
+                parser.manifest.uri = this.srcURL;
 
-                // setup by-URI lookups and resolve media playlist URIs
-                i = this.master.playlists.length;
-                while (i--) {
-                    playlist = this.master.playlists[i];
-                    this.master.playlists[playlist.uri] = playlist;
-                    playlist.resolvedUri = resolveURL(this.master.uri, playlist.uri);
-                }
+                // loaded a master playlist
+                if (parser.manifest.playlists) {
+                    this.master = parser.manifest;
 
-                // resolve any media group URIs
-                for (let groupKey in loader.master.mediaGroups.AUDIO) {
-                    for (let labelKey in loader.master.mediaGroups.AUDIO[groupKey]) {
-                        let alternateAudio = loader.master.mediaGroups.AUDIO[groupKey][labelKey];
+                    // setup by-URI lookups and resolve media playlist URIs
+                    i = this.master.playlists.length;
+                    while (i--) {
+                        playlist = this.master.playlists[i];
+                        this.master.playlists[playlist.uri] = playlist;
+                        playlist.resolvedUri = resolveURL(this.master.uri, playlist.uri);
+                    }
 
-                        if (alternateAudio.uri) {
-                            alternateAudio.resolvedUri =
-                                resolveURL(loader.master.uri, alternateAudio.uri);
+                    // resolve any media group URIs
+                    for (let groupKey in this.master.mediaGroups.AUDIO) {
+                        for (let labelKey in this.master.mediaGroups.AUDIO[groupKey]) {
+                            let alternateAudio = this.master.mediaGroups.AUDIO[groupKey][labelKey];
+
+                            if (alternateAudio.uri) {
+                                alternateAudio.resolvedUri =
+                                    resolveURL(this.master.uri, alternateAudio.uri);
+                            }
                         }
                     }
-                }
-                
-                
-            }
-        }).catch((e) => {
 
-        })
+                    this.trigger('loadedplaylist');
+
+                    if (!this._xhr) {
+                        // no media playlist was specifically selected so start
+                        // from the first listed one
+                        this.media(parser.manifest.playlist[0]);
+                        return;
+                    }
+
+                }
+
+                // loaded a media playlist
+                // infer a master playlist if none was previously requested
+                this.master = {
+                    mediaGroups: {
+                        'AUDIO': {},
+                        'VIDEO': {},
+                        'CLOSED-CAPTIONS': {},
+                        'SUBTITLES': {}
+                    },
+                    uri: window.location.href,
+                    playlists: [{
+                        uri: this.srcURL
+                    }]
+                };
+
+                this.master.playlists[this.srcURL] = this.master.playlists[0];
+                this.master.playlists[0].resolvedUri = this.srcURL;
+                this.haveMetadata(xhr, this.srcURL);
+                return this.trigger('loadedmetadata');
+
+            }
+        });
     }
 
     stopRequest() {
@@ -438,30 +468,96 @@ class M3U8PlaylistLoader {
         if (this._media) {
             this.trigger('mediachanging');
         }
-        this._xhr = this.hls_.xhr({
-            uri: resolveURL(this.master.uri, playlist.uri),
-            withCredentials: this.withCredentials
-        }, function (error, req) {
-            // disposed
-            if (!this._xhr) {
-                return;
-            }
 
-            if (error) {
-                return this.onPlaylistRequestError(this._xhr, playlist.uri, startingState);
-            }
+        this._xhr = this.xhr(resolveURL(this.master.uri, playlist.uri), {
+            withCredentials: this.withCredentials,
+            success(e, xhr) {
+                if (!this._xhr) {
+                    return;
+                }
+                this.haveMetadata(xhr, playlist.uri);
 
-            this.haveMetadata(req, playlist.uri);
-
-            // fire loadedmetadata the first time a media playlist is loaded
-            if (startingState === 'HAVE_MASTER') {
-                this.trigger('loadedmetadata');
-            } else {
-                this.trigger('mediachange');
+                // fire loadedmetadata the first time a media playlist is loaded
+                if (startingState === 'HAVE_MASTER') {
+                    this.trigger('loadedmetadata');
+                } else {
+                    this.trigger('mediachange');
+                }
+            },
+            error() {
+                this.onPlaylistRequestError(this._xhr, playlist.uri, startingState);
             }
         });
+
     }
 
+    xhr(url, params = {}) {
+        let request, xhr, start, end, fn = function () {}, headers, key;
+
+        const calcBandwidth = function (xhr, start, end) {
+            let bytes = xhr.response.byteLength || xhr.responseText.length;
+            return bytes / Math.abs(end - start);
+        };
+
+        request = {
+            headers: {},
+            method: 'get',
+            withCredentials: false,
+            responseType: 'text',
+            error: fn,
+            readystatechange: fn,
+            progress: fn,
+            load: fn,
+            success: fn,
+            timeout: fn
+        };
+        Object.assign(request, params);
+
+        // support jQuery.ajax habits
+        if (request.success !== fn) {
+            request.load = request.success;
+        }
+
+        xhr = new XMLHttpRequest();
+        xhr.open(request.method, url, true);
+        start = new Date();
+        
+        xhr.onload = (e) => {
+            // some calculations and hash map
+            end = new Date();
+            xhr.bandwidth = calcBandwidth(xhr, start, end);
+            xhr.url = xhr.responseURL;
+
+            // only 20x status trigger success callback
+            if (xhr.statusText && (xhr.status >= 200 && xhr.status <= 299)) {
+                typeof request.load === 'function' && request.load.call(this, e, xhr);
+            } else {
+                typeof request.error === 'function' && request.error.call(this, e, xhr);
+            }
+        };
+
+        xhr.onerror = request.error.bind(this);
+        xhr.onprogress = request.progress.bind(this);
+        xhr.onreadystatechange = request.readystatechange.bind(this);
+        xhr.ontimeout = request.timeout.bind(this);
+
+        headers = request.headers;
+
+        for (key in headers) {
+            if (headers.hasOwnProperty(key)) {
+                xhr.setRequestHeader(key, headers[key]);
+            }
+        }
+        
+        if (request.withCredentials && 'withCredentials' in xhr) {
+            xhr.withCredentials = true;
+        }
+
+        xhr.responseType = request.responseType;
+
+        xhr.send();
+        return xhr;
+    }
 }
 
 export default M3U8PlaylistLoader;

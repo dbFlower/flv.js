@@ -18,6 +18,7 @@
 
 import Polyfill from './utils/polyfill.js';
 import Features from './core/features.js';
+import M3U8ListLoader from './io/m3u8-playlist-loader';
 import FlvPlayer from './player/flv-player.js';
 import NativePlayer from './player/native-player.js';
 import PlayerEvents from './player/player-events.js';
@@ -67,6 +68,7 @@ let flvjs = {};
 flvjs.createPlayer = createPlayer;
 flvjs.isSupported = isSupported;
 flvjs.getFeatureList = getFeatureList;
+flvjs.M3U8ListLoader = M3U8ListLoader;
 
 flvjs.Events = PlayerEvents;
 flvjs.ErrorTypes = ErrorTypes;
