@@ -23,6 +23,7 @@
     "es6-promise": "^4.0.5",
     "iphone-inline-video": "^1.9.4",
     "m3u8-parser": "^1.2.0",
+    "mux.js": "^3.0.4",
     "url-toolkit": "^1.0.7",
     "webworkify": "^1.4.0",
     "whatwg-fetch": "^2.0.1"
@@ -32,6 +33,7 @@
     "babelify": "^7.3.0",
     "browserify": "^13.1.1",
     "browserify-derequire": "^0.9.4",
+    "browserify-shim": "^3.8.12",
     "browserify-versionify": "^1.0.6",
     "del": "^2.2.0",
     "gulp": "^3.9.1",

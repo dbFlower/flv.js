@@ -114,6 +114,7 @@ class M3U8PlaylistLoader extends Stream {
         this.cors = true;
         this.bandwidth = null;
         this.started = false;
+        this.master = null;
         this._media = null;
         this.update = null;
         this._xhr = null;
@@ -494,6 +495,7 @@ class M3U8PlaylistLoader extends Stream {
     xhr(url, params = {}) {
         let request, xhr, start, end, fn = function () {}, headers, key;
 
+        // calc bandwidth, returns kb/s
         const calcBandwidth = function (xhr, start, end) {
             let bytes = xhr.response.byteLength || xhr.responseText.length;
             return bytes / Math.abs(end - start);

@@ -230,7 +230,6 @@ class TransmuxingController {
     _onInitChunkArrival(data, byteStart) {
         let probeData = null;
         let consumed = 0;
-
         if (byteStart > 0) {
             // IOController seeked immediately after opened, byteStart > 0 callback may received
             this._demuxer.bindDataSource(this._ioctl);

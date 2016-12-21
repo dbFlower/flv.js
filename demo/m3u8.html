@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Title</title>
-  <script src="./m3u8-parser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/hls.js/latest/hls.min.js"></script>
 </head>
 <body>
   <video id="flvjs-m3u8-player" class="flvjs " controls>
@@ -16,5 +16,13 @@
   console.log('canplay application/x-mpegurl '.concat(v.canPlayType('application/x-mpegurl')))
   console.log('canplay application/vnd.apple.mpegurl '.concat(v.canPlayType('application/vnd.apple.mpegurl')))
   console.log('support requestFullscreen', 'requestFullscreen' in HTMLVideoElement.prototype)
+
+  var hls = new Hls()
+
+  hls.loadSource('/m3u8/test_720.m3u8')
+  hls.attachMedia(v)
+  hls.on(Hls.Events.MANIFEST_PARSED, function () {
+    v.play()
+  })
 </script>
 </html>
