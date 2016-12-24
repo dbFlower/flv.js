@@ -52,18 +52,39 @@ class ExpGolomb {
 
     // (count:int):void
     skipBits(count) {
-        var skipBytes; // :int
-        if (this.bitsAvailable > count) {
+        let skipBytes; // :int
+        if (this._current_word_bits_left > count) {
             this._current_word <<= count;
-            this.bitsAvailable -= count;
+            this._current_word_bits_left -= count;
         } else {
-            count -= this.bitsAvailable;
+            count -= this._current_word_bits_left;
             skipBytes = count >> 3;
             count -= (skipBytes >> 3);
-            this.bytesAvailable -= skipBytes;
+            this._buffer_index += skipBytes;
             this._fillCurrentWord();
             this._current_word <<= count;
-            this.bitsAvailable -= count;
+            this._current_word_bits_left -= count;
+        }
+    }
+
+    // ():void
+    skipUEG() {
+        this.skipBits(1 + this._skipLeadingZero());
+    }
+
+    // ():void
+    skipEG() {
+        this.skipBits(1 + this._skipLeadingZero());
+    }
+
+    // ():int
+    readEG() {
+        let valu = this.readUEG(); // :int
+        if (0x01 & valu) {
+            // the number is odd if the low order bit is set
+            return (1 + valu) >>> 1; // add 1 to make it even, and divide by 2
+        } else {
+            return -1 * (valu >>> 1); // divide by two then make it negative
         }
     }
 
@@ -108,6 +129,7 @@ class ExpGolomb {
     readInt() {
         return this.readBits(32);
     }
+
     _skipLeadingZero() {
         let zero_count;
         for (zero_count = 0; zero_count < this._current_word_bits_left; zero_count++) {
@@ -136,6 +158,28 @@ class ExpGolomb {
     }
 
     /**
+     * Advance the ExpGolomb decoder past a scaling list. The scaling
+     * list is optionally transmitted as part of a sequence parameter
+     * set and is not relevant to transmuxing.
+     * @param count {number} the number of entries in this scaling list
+     * @see Recommendation ITU-T H.264, Section 7.3.2.1.1.1
+     */
+    skipScalingList(count) {
+        let
+            lastScale = 8,
+            nextScale = 8,
+            j,
+            deltaScale;
+        for (j = 0; j < count; j++) {
+            if (nextScale !== 0) {
+                deltaScale = this.readEG();
+                nextScale = (lastScale + deltaScale + 256) % 256;
+            }
+            lastScale = (nextScale === 0) ? lastScale : nextScale;
+        }
+    }
+
+    /**
      * Read a sequence parameter set and return some interesting video
      * properties. A sequence parameter set is the H264 metadata that
      * describes the properties of upcoming video frames.
@@ -145,45 +189,45 @@ class ExpGolomb {
      * associated video frames.
      */
     readSPS() {
-        var
+        let
             frameCropLeftOffset = 0,
             frameCropRightOffset = 0,
             frameCropTopOffset = 0,
             frameCropBottomOffset = 0,
             sarScale = 1,
-            profileIdc,profileCompat,levelIdc,
+            profileIdc, profileCompat, levelIdc,
             numRefFramesInPicOrderCntCycle, picWidthInMbsMinus1,
             picHeightInMapUnitsMinus1,
             frameMbsOnlyFlag,
             scalingListCount,
             i;
-        this.readUByte();
-        profileIdc = this.readUByte(); // profile_idc
+        this.readByte();
+        profileIdc = this.readByte(); // profile_idc
         profileCompat = this.readBits(5); // constraint_set[0-4]_flag, u(5)
         this.skipBits(3); // reserved_zero_3bits u(3),
-        levelIdc = this.readUByte(); //level_idc u(8)
+        levelIdc = this.readByte(); //level_idc u(8)
         this.skipUEG(); // seq_parameter_set_id
         // some profiles have more optional data we don't need
         if (profileIdc === 100 ||
             profileIdc === 110 ||
             profileIdc === 122 ||
             profileIdc === 244 ||
-            profileIdc === 44  ||
-            profileIdc === 83  ||
-            profileIdc === 86  ||
+            profileIdc === 44 ||
+            profileIdc === 83 ||
+            profileIdc === 86 ||
             profileIdc === 118 ||
             profileIdc === 128) {
-            var chromaFormatIdc = this.readUEG();
+            let chromaFormatIdc = this.readUEG();
             if (chromaFormatIdc === 3) {
                 this.skipBits(1); // separate_colour_plane_flag
             }
             this.skipUEG(); // bit_depth_luma_minus8
             this.skipUEG(); // bit_depth_chroma_minus8
             this.skipBits(1); // qpprime_y_zero_transform_bypass_flag
-            if (this.readBoolean()) { // seq_scaling_matrix_present_flag
+            if (this.readBool()) { // seq_scaling_matrix_present_flag
                 scalingListCount = (chromaFormatIdc !== 3) ? 8 : 12;
                 for (i = 0; i < scalingListCount; i++) {
-                    if (this.readBoolean()) { // seq_scaling_list_present_flag[ i ]
+                    if (this.readBool()) { // seq_scaling_list_present_flag[ i ]
                         if (i < 6) {
                             this.skipScalingList(16);
                         } else {
@@ -194,7 +238,7 @@ class ExpGolomb {
             }
         }
         this.skipUEG(); // log2_max_frame_num_minus4
-        var picOrderCntType = this.readUEG();
+        let picOrderCntType = this.readUEG();
         if (picOrderCntType === 0) {
             this.readUEG(); //log2_max_pic_order_cnt_lsb_minus4
         } else if (picOrderCntType === 1) {
@@ -202,7 +246,7 @@ class ExpGolomb {
             this.skipEG(); // offset_for_non_ref_pic
             this.skipEG(); // offset_for_top_to_bottom_field
             numRefFramesInPicOrderCntCycle = this.readUEG();
-            for(i = 0; i < numRefFramesInPicOrderCntCycle; i++) {
+            for (i = 0; i < numRefFramesInPicOrderCntCycle; i++) {
                 this.skipEG(); // offset_for_ref_frame[ i ]
             }
         }
@@ -215,37 +259,69 @@ class ExpGolomb {
             this.skipBits(1); // mb_adaptive_frame_field_flag
         }
         this.skipBits(1); // direct_8x8_inference_flag
-        if (this.readBoolean()) { // frame_cropping_flag
+        if (this.readBool()) { // frame_cropping_flag
             frameCropLeftOffset = this.readUEG();
             frameCropRightOffset = this.readUEG();
             frameCropTopOffset = this.readUEG();
             frameCropBottomOffset = this.readUEG();
         }
-        if (this.readBoolean()) {
+        if (this.readBool()) {
             // vui_parameters_present_flag
-            if (this.readBoolean()) {
+            if (this.readBool()) {
                 // aspect_ratio_info_present_flag
                 let sarRatio;
-                const aspectRatioIdc = this.readUByte();
+                const aspectRatioIdc = this.readByte();
                 switch (aspectRatioIdc) {
-                    case 1: sarRatio = [1,1]; break;
-                    case 2: sarRatio = [12,11]; break;
-                    case 3: sarRatio = [10,11]; break;
-                    case 4: sarRatio = [16,11]; break;
-                    case 5: sarRatio = [40,33]; break;
-                    case 6: sarRatio = [24,11]; break;
-                    case 7: sarRatio = [20,11]; break;
-                    case 8: sarRatio = [32,11]; break;
-                    case 9: sarRatio = [80,33]; break;
-                    case 10: sarRatio = [18,11]; break;
-                    case 11: sarRatio = [15,11]; break;
-                    case 12: sarRatio = [64,33]; break;
-                    case 13: sarRatio = [160,99]; break;
-                    case 14: sarRatio = [4,3]; break;
-                    case 15: sarRatio = [3,2]; break;
-                    case 16: sarRatio = [2,1]; break;
+                    case 1:
+                        sarRatio = [1, 1];
+                        break;
+                    case 2:
+                        sarRatio = [12, 11];
+                        break;
+                    case 3:
+                        sarRatio = [10, 11];
+                        break;
+                    case 4:
+                        sarRatio = [16, 11];
+                        break;
+                    case 5:
+                        sarRatio = [40, 33];
+                        break;
+                    case 6:
+                        sarRatio = [24, 11];
+                        break;
+                    case 7:
+                        sarRatio = [20, 11];
+                        break;
+                    case 8:
+                        sarRatio = [32, 11];
+                        break;
+                    case 9:
+                        sarRatio = [80, 33];
+                        break;
+                    case 10:
+                        sarRatio = [18, 11];
+                        break;
+                    case 11:
+                        sarRatio = [15, 11];
+                        break;
+                    case 12:
+                        sarRatio = [64, 33];
+                        break;
+                    case 13:
+                        sarRatio = [160, 99];
+                        break;
+                    case 14:
+                        sarRatio = [4, 3];
+                        break;
+                    case 15:
+                        sarRatio = [3, 2];
+                        break;
+                    case 16:
+                        sarRatio = [2, 1];
+                        break;
                     case 255: {
-                        sarRatio = [this.readUByte() << 8 | this.readUByte(), this.readUByte() << 8 | this.readUByte()];
+                        sarRatio = [this.readByte() << 8 | this.readByte(), this.readByte() << 8 | this.readByte()];
                         break;
                     }
                 }
@@ -256,7 +332,7 @@ class ExpGolomb {
         }
         return {
             width: Math.ceil((((picWidthInMbsMinus1 + 1) * 16) - frameCropLeftOffset * 2 - frameCropRightOffset * 2) * sarScale),
-            height: ((2 - frameMbsOnlyFlag) * (picHeightInMapUnitsMinus1 + 1) * 16) - ((frameMbsOnlyFlag? 2 : 4) * (frameCropTopOffset + frameCropBottomOffset))
+            height: ((2 - frameMbsOnlyFlag) * (picHeightInMapUnitsMinus1 + 1) * 16) - ((frameMbsOnlyFlag ? 2 : 4) * (frameCropTopOffset + frameCropBottomOffset))
         };
     }
 }

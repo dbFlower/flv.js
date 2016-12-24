@@ -142,7 +142,10 @@ class MSEController {
 
         if (this._mediaElement) {
             this._mediaElement.src = '';
+            // Detach properly the MediaSource from the HTMLMediaElement as
+            // suggested in https://github.com/w3c/media-source/issues/53.
             this._mediaElement.removeAttribute('src');
+            this._mediaElement.load();
             this._mediaElement = null;
         }
         if (this._mediaSourceObjectURL) {

@@ -4,6 +4,7 @@
 
 import Log from '../utils/logger';
 import ExpGolomb from './exp-golomb';
+import ID3 from './id3';
 import ADTS from './adts';
 const ErrorTypes = {};
 const ErrorDetails = {};
@@ -11,6 +12,7 @@ class TSDemuxer {
     constructor(config, typeSupported, remuxer) {
         this.TAG = 'TSDemuxer';
         this.typeSupported = typeSupported;
+        this.config = config;
         this.remuxer = remuxer;
     }
 
